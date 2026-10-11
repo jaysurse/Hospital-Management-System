@@ -1,0 +1,11 @@
+target/
+*.class
+.idea/
+.vscode/
+.env
+.env.*
+!.env.example
+.m2/
+.maven/
+*.log
+.DS_Store
