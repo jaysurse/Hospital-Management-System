@@ -7,7 +7,7 @@ package com.hospital.config;
 public final class HospitalConstants {
 
     public static final String APP_NAME = "Hospital Management System (HMS)";
-    public static final String APP_VERSION = "v1.0.0 (Enterprise OOP Edition)";
+    public static final String APP_VERSION = "v1.0.0 (OOP MINI PROJECT)";
     public static final String HOSPITAL_NAME = "METROPOLITAN HEALTHCARE & RESEARCH CENTRE";
     public static final String HOSPITAL_TAGLINE = "Excellence in Clinical Care & Patient Service";
     public static final String HOSPITAL_ADDRESS = "Plot 42, Health City Avenue, Medical Enclave";

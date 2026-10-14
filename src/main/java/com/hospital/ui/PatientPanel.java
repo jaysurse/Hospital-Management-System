@@ -3,8 +3,10 @@ package com.hospital.ui;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
+import java.io.File;
 import java.util.List;
 import javax.swing.JButton;
+import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
@@ -20,6 +22,7 @@ import com.hospital.service.MedicalRecordService;
 import com.hospital.service.PatientService;
 import com.hospital.ui.dialogs.PatientDialog;
 import com.hospital.util.DateUtil;
+import com.hospital.util.FileUtil;
 
 /**
  * Patient Management Panel.
@@ -97,12 +100,19 @@ public class PatientPanel extends JPanel {
         JButton btnHistory = UIHelper.createSecondaryButton("Medical History");
         btnHistory.addActionListener(e -> viewMedicalHistory());
 
+        JButton btnExportHistory = null;
+        if (parentFrame.isAdministrator()) {
+            btnExportHistory = UIHelper.createOutlineButton("Export History TXT");
+            btnExportHistory.addActionListener(e -> exportMedicalHistory());
+        }
+
         JButton btnDelete = UIHelper.createDangerButton("Delete");
         btnDelete.addActionListener(e -> deleteSelectedPatient());
 
         actions.add(btnRegister);
         actions.add(btnEdit);
         actions.add(btnHistory);
+        if (btnExportHistory != null) actions.add(btnExportHistory);
         actions.add(btnDelete);
         toolbar.add(actions, BorderLayout.EAST);
 
@@ -267,9 +277,76 @@ public class PatientPanel extends JPanel {
 
             JScrollPane scroll = new JScrollPane(txtArea);
             scroll.setPreferredSize(new Dimension(640, 480));
-            JOptionPane.showMessageDialog(this, scroll, "Patient Clinical History - " + selected.getFullName(), JOptionPane.PLAIN_MESSAGE);
+            if (parentFrame.isAdministrator()) {
+                Object[] options = {"Export This Patient's History", "Close"};
+                int choice = JOptionPane.showOptionDialog(this, scroll,
+                    "Patient Clinical History - " + selected.getFullName(),
+                    JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE,
+                    null, options, options[1]);
+                if (choice == 0) exportMedicalHistory(selected);
+            } else {
+                JOptionPane.showMessageDialog(this, scroll, "Patient Clinical History - " + selected.getFullName(), JOptionPane.PLAIN_MESSAGE);
+            }
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this, "Failed to retrieve medical history: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void exportMedicalHistory() {
+        if (!parentFrame.isAdministrator()) {
+            JOptionPane.showMessageDialog(this, "Only administrators can export medical history.", "Access Denied", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        Patient selected = getSelectedPatient();
+        if (selected == null) {
+            JOptionPane.showMessageDialog(this, "Please select a patient to export medical history.", "Selection Required", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        try {
+            exportMedicalHistory(selected);
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, "Failed to export medical history: " + e.getMessage(), "Export Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void exportMedicalHistory(Patient selected) {
+        try {
+            List<MedicalRecord> records = medicalRecordService.getRecordsByPatientId(selected.getId());
+            JFileChooser chooser = new JFileChooser();
+            chooser.setDialogTitle("Export Medical History for " + selected.getFullName());
+            chooser.setSelectedFile(new File("medical_history_patient_" + selected.getId() + ".txt"));
+            if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) return;
+
+            File target = chooser.getSelectedFile();
+            if (!target.getName().toLowerCase().endsWith(".txt")) {
+                target = new File(target.getParentFile(), target.getName() + ".txt");
+            }
+
+            StringBuilder history = new StringBuilder();
+            history.append(selected.getDetails()).append("\n\n");
+            if (records.isEmpty()) {
+                history.append("No previous clinical examination or diagnostic records found for this patient.\n");
+            } else {
+                for (int i = 0; i < records.size(); i++) {
+                    MedicalRecord record = records.get(i);
+                    history.append(String.format("CONSULTATION #%d [%s]\n", i + 1, record.getFormattedDate()));
+                    history.append(String.format("Consulting Physician: %s (%s)\n",
+                        record.getDoctorName(), record.getDoctorSpecialization() != null ? record.getDoctorSpecialization() : "General"));
+                    history.append("Clinical Diagnosis:\n").append(record.getDiagnosis()).append("\n\n");
+                    history.append("Prescriptions (Rx):\n").append(record.getPrescription()).append("\n\n");
+                    String notes = record.getTreatmentNotes();
+                    history.append("Physician Notes:\n")
+                        .append(notes != null && !notes.trim().isEmpty() ? notes : "None").append("\n");
+                    history.append("----------------------------------------------------------------------\n\n");
+                }
+            }
+
+            FileUtil.exportToTextFile(target, "Medical History - " + selected.getFullName(), List.of(history.toString()));
+            JOptionPane.showMessageDialog(this, "Medical history for " + selected.getFullName() + " exported to:\n" + target.getAbsolutePath(), "Export Complete", JOptionPane.INFORMATION_MESSAGE);
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, "Failed to export medical history: " + e.getMessage(), "Export Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 

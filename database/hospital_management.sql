@@ -1,8 +1,4 @@
--- =====================================================================
--- Hospital Management System (HMS) - Database Initialization Script
--- Database: hospital_management
--- Suitable for: MySQL 8.0+ / MariaDB / H2 (MySQL Mode)
--- =====================================================================
+
 
 CREATE DATABASE IF NOT EXISTS hospital_management;
 USE hospital_management;

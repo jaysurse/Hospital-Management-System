@@ -83,6 +83,10 @@ public class MainDashboardFrame extends JFrame {
     private String currentCard = "dashboard";
     protected final boolean receptionistMode;
 
+    public boolean isAdministrator() {
+        return authService.isAdmin();
+    }
+
     public MainDashboardFrame() {
         this(false);
     }

@@ -3,8 +3,10 @@ package com.hospital.ui;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
+import java.io.File;
 import java.util.List;
 import javax.swing.JButton;
+import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
@@ -19,6 +21,7 @@ import com.hospital.model.MedicalRecord;
 import com.hospital.service.DoctorService;
 import com.hospital.service.MedicalRecordService;
 import com.hospital.service.PatientService;
+import com.hospital.util.FileUtil;
 import com.hospital.ui.dialogs.MedicalRecordDialog;
 
 /**
@@ -105,10 +108,17 @@ public class MedicalRecordPanel extends JPanel {
         JButton btnDelete = UIHelper.createDangerButton("Delete");
         btnDelete.addActionListener(e -> deleteRecord());
 
+        JButton btnExport = null;
+        if (parentFrame.isAdministrator()) {
+            btnExport = UIHelper.createOutlineButton("Export TXT");
+            btnExport.addActionListener(e -> exportRecord());
+        }
+
         actions.add(btnAdd);
         actions.add(btnView);
         actions.add(btnEdit);
         actions.add(btnDelete);
+        if (btnExport != null) actions.add(btnExport);
         toolbar.add(actions, BorderLayout.EAST);
 
         card.add(toolbar, BorderLayout.NORTH);
@@ -262,11 +272,59 @@ public class MedicalRecordPanel extends JPanel {
         }
     }
 
+    private void exportRecord() {
+        if (!parentFrame.isAdministrator()) {
+            JOptionPane.showMessageDialog(this, "Only administrators can export medical records.", "Access Denied", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        MedicalRecord selected = getSelectedRecord();
+        if (selected == null) {
+            JOptionPane.showMessageDialog(this, "Please select a medical record to export.", "Selection Required", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        JFileChooser chooser = new JFileChooser();
+        chooser.setDialogTitle("Export Medical Record as Plain Text");
+        chooser.setSelectedFile(new File("medical_record_" + selected.getId() + ".txt"));
+        if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
+
+        File target = chooser.getSelectedFile();
+        if (!target.getName().toLowerCase().endsWith(".txt")) {
+            target = new File(target.getParentFile(), target.getName() + ".txt");
+        }
+
+        String notes = selected.getTreatmentNotes();
+        if (notes == null || notes.trim().isEmpty()) {
+            notes = "No special post-consultation directives.";
+        }
+
+        List<String> sections = List.of(
+            "RECORD ID: #" + selected.getId(),
+            "PATIENT: " + selected.getPatientName() + " (ID: #" + selected.getPatientId() + ")",
+            "CONSULTING DOCTOR: " + selected.getDoctorName() + " (" + selected.getDoctorSpecialization() + ")",
+            "DATE RECORDED: " + selected.getFormattedDate(),
+            "\nCLINICAL DIAGNOSIS\n------------------\n" + selected.getDiagnosis(),
+            "\nPRESCRIPTION & PHARMACOTHERAPY\n------------------------------\n" + selected.getPrescription(),
+            "\nPHYSICIAN DIRECTIVES & TREATMENT NOTES\n---------------------------------------\n" + notes
+        );
+
+        try {
+            FileUtil.exportToTextFile(target, "Clinical Medical Record", sections);
+            JOptionPane.showMessageDialog(this, "Medical record exported to:\n" + target.getAbsolutePath(), "Export Complete", JOptionPane.INFORMATION_MESSAGE);
+        } catch (java.io.IOException e) {
+            JOptionPane.showMessageDialog(this, "Failed to export medical record: " + e.getMessage(), "Export Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
     private MedicalRecord getSelectedRecord() {
-        int row = recordTable.getSelectedRow();
-        if (row < 0 || currentRecords == null || row >= currentRecords.size()) {
+        int viewRow = recordTable.getSelectedRow();
+        if (viewRow < 0 || currentRecords == null) {
             return null;
         }
+        int row = recordTable.convertRowIndexToModel(viewRow);
+        if (row >= currentRecords.size()) return null;
         return currentRecords.get(row);
     }
 }

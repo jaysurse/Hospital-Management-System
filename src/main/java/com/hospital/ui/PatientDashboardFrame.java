@@ -12,6 +12,7 @@ import java.awt.GridLayout;
 import java.awt.Insets;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.io.File;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -22,6 +23,7 @@ import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JFrame;
+import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
@@ -61,6 +63,7 @@ import com.hospital.service.MedicalRecordService;
 import com.hospital.service.PatientService;
 import com.hospital.ui.dialogs.ReceiptDialog;
 import com.hospital.util.DateUtil;
+import com.hospital.util.FileUtil;
 
 /**
  * Patient Dashboard Window.
@@ -655,10 +658,16 @@ public class PatientDashboardFrame extends JFrame {
         JPanel card = UIHelper.createCardPanel();
         card.setLayout(new BorderLayout(0, 10));
 
+        JPanel heading = new JPanel(new BorderLayout());
+        heading.setBackground(Theme.SURFACE);
         JLabel lblTitle = new JLabel("Official Clinical History & Prescriptions");
         lblTitle.setFont(Theme.FONT_HEADER);
         lblTitle.setForeground(Theme.TEXT_MAIN);
-        card.add(lblTitle, BorderLayout.NORTH);
+        JButton btnExportHistory = UIHelper.createOutlineButton("Export My History TXT");
+        btnExportHistory.addActionListener(e -> exportMyMedicalHistory());
+        heading.add(lblTitle, BorderLayout.WEST);
+        heading.add(btnExportHistory, BorderLayout.EAST);
+        card.add(heading, BorderLayout.NORTH);
 
         String[] cols = {"Record ID", "Consultation Date", "Doctor Name", "Specialization", "Clinical Diagnosis"};
         recordTableModel = new DefaultTableModel(cols, 0) {
@@ -694,6 +703,51 @@ public class PatientDashboardFrame extends JFrame {
 
         panel.add(card, BorderLayout.CENTER);
         return panel;
+    }
+
+    private void exportMyMedicalHistory() {
+        if (currentPatient == null) {
+            JOptionPane.showMessageDialog(this, "Patient profile is not available.", "Export Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        JFileChooser chooser = new JFileChooser();
+        chooser.setDialogTitle("Export My Medical History as Plain Text");
+        chooser.setSelectedFile(new File("medical_history_patient_" + currentPatient.getId() + ".txt"));
+        if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) return;
+
+        File target = chooser.getSelectedFile();
+        if (!target.getName().toLowerCase().endsWith(".txt")) {
+            target = new File(target.getParentFile(), target.getName() + ".txt");
+        }
+
+        try {
+            List<MedicalRecord> records = medicalRecordService.getRecordsByPatient(currentPatient.getId());
+            StringBuilder history = new StringBuilder();
+            history.append(currentPatient.getDetails()).append("\n\n");
+            if (records.isEmpty()) {
+                history.append("No medical records are available.\n");
+            } else {
+                for (int i = 0; i < records.size(); i++) {
+                    MedicalRecord record = records.get(i);
+                    Doctor doctor = doctorDAO.findById(record.getDoctorId());
+                    history.append(String.format("CONSULTATION #%d [%s]\n", i + 1, record.getFormattedDate()));
+                    history.append("Doctor: ").append(doctor != null ? doctor.getFullName() : "Doctor #" + record.getDoctorId())
+                        .append(" (").append(doctor != null ? doctor.getSpecialization() : "OPD").append(")\n");
+                    history.append("Diagnosis:\n").append(record.getDiagnosis()).append("\n\n");
+                    history.append("Prescription:\n").append(record.getPrescription()).append("\n\n");
+                    String notes = record.getTreatmentNotes();
+                    history.append("Treatment Notes:\n")
+                        .append(notes != null && !notes.trim().isEmpty() ? notes : "None").append("\n");
+                    history.append("----------------------------------------------------------------------\n\n");
+                }
+            }
+
+            FileUtil.exportToTextFile(target, "Patient Clinical Medical History", List.of(history.toString()));
+            JOptionPane.showMessageDialog(this, "Your medical history was exported to:\n" + target.getAbsolutePath(), "Export Complete", JOptionPane.INFORMATION_MESSAGE);
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, "Failed to export medical history: " + e.getMessage(), "Export Error", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     private void showSelectedRecordDetail() {
